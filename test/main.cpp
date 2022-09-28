@@ -20,6 +20,7 @@
 #include <vector>
 #include <chrono>
 #include <random>
+#include <fstream>
 // SFML
 #include <SFML/Graphics.hpp>
 // MyGAL
@@ -171,37 +172,58 @@ template<typename T>
 graph MakeGraph(const Diagram<T>& dia,int pnts)
 {
     graph G;
-    G.area = dia.computeArea(); // construct graph
+    std::vector<int> tempS;
+    std::vector<int> tempT;
+    std::vector<bool> del;
+    G.area = dia.computeArea(); // get area of each polygon
     G.vertices = dia.ReturnV(); // get vertices of each polygon
-    //G.angle = dia.computeAngle(); // get inclination of edge in radians
-    auto triangulation = dia.computeTriangulation();  // get area of each polygon
+    auto triangulation = dia.computeTriangulation();  // construct graph
     
     for (int i = 0; i < pnts; i++) {
         auto& Neighbor = triangulation.getNeighbors(i);
         for (int j = 0; j < Neighbor.size(); j++) {
-            G.s.push_back(i);
-            G.t.push_back(Neighbor.at(j));
+            tempS.push_back(i);
+            tempT.push_back(Neighbor.at(j));
+            del.push_back(false);
         }
     }
+    // delete duplicates, each edge has duplicate inverse value
+    for (int i = 0; i < tempS.size(); i++) {
+        int vert_s = tempS.at(i);
+        int vert_t = tempT.at(i);
+        for (int j = 0; j < tempT.size(); j++) {
+            if (i == j ) continue;
+            if (del.at(i)) break;
+            int test_s = tempT.at(j);
+            int test_t = tempS.at(j);
+            if (vert_s == test_s &&
+                vert_t == test_t) {
+                del.at(j) = true;
+                break;
+            }
+        }
+    }
+    for (int i = 0; i < tempS.size(); i++) {
+        if (!del.at(i)) {
+            G.s.push_back(tempS.at(i));
+            G.t.push_back(tempT.at(i));
+        }
+    }
+
+    // compute a_pq and inclination of boundary
     double tol = 1e-20;
     std::vector<mygal::Vector2<double>> triPnt;
     for (int i = 0; i < G.s.size(); i++) {
         std::vector<mygal::Vector2<double>> Vs = G.vertices.at(G.s.at(i));
         std::vector<mygal::Vector2<double>> Vt = G.vertices.at(G.t.at(i));
-
         triPnt.clear();
         for (int j = 0; j < Vs.size(); j++) {
             for (int k = 0; k < Vt.size(); k++) {
-
-                double testx = (Vs.at(j) - Vt.at(k)).getNorm();
-                double testy = (Vs.at(j) - Vt.at(k)).getNorm() <= tol;
                 if ((Vs.at(j)-Vt.at(k)).getNorm() <= tol) {
-
                     triPnt.push_back(Vs.at(j));
-                    if (triPnt.size() >= 2) {
-                    
+                    if (triPnt.size() == 2) {
                         G.GBarea.push_back((triPnt.at(0) - triPnt.at(1)).getNorm());
-                        G.angle.push_back(triPnt.at(0).getAngle(triPnt.at(1)));
+                        G.angle.push_back(triPnt.at(1).getAngle(triPnt.at(0)));
                         break;
                     }
                 }
@@ -213,13 +235,34 @@ graph MakeGraph(const Diagram<T>& dia,int pnts)
     return G;
 }
 
+void saveGraph(graph& G)
+{
+    int NumVertices = G.N - G.edges;
+    std::ofstream myfile("Microstructure.txt", std::ios::trunc);
+    myfile << "s t a_{pq} GB_Angle Volume (number vertices = " << NumVertices << ")" << std::endl;
+    if (myfile.is_open())
+    {
+        for (int val = 0; val < G.edges; val++) {
+
+            myfile << G.s.at(val) << " " << G.t.at(val) << " " << G.GBarea.at(val) << " " << G.angle.at(val);
+            if (val < NumVertices) {
+
+                myfile << " " << G.area.at(val);
+            }
+            myfile << std::endl;
+        }
+        myfile.close();
+    }
+    else std::cout << "Unable to open file";
+}
 int main()
 {
-    auto nbPoints = 100;
+    auto nbPoints = 1000;
     auto diagram = generateDiagram(generatePoints<Float>(nbPoints));
     auto triangulation = diagram.computeTriangulation();
 
     graph G = MakeGraph(diagram, nbPoints);
+    saveGraph(G);
  
     // Display the diagram
     auto settings = sf::ContextSettings();
