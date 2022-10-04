@@ -97,6 +97,7 @@ namespace mygal
             HalfEdge* outerComponent; /**< A half-edge of the face */
         };
 
+        Diagram();
         // Remove copy operations
 
         Diagram(const Diagram&) = delete;

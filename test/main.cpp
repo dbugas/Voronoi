@@ -52,6 +52,33 @@ std::vector<Vector2<T>> generatePoints(int nbPoints)
 
     return points;
 }
+template<typename T>
+std::vector<Vector2<T>> generateBimodalLaminate(int numSec, int finePnts, int coarsePnts)
+{
+    auto seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::cout << "seed: " << seed << '\n';
+    auto generator = std::default_random_engine(seed);
+    auto distribution_x = std::uniform_real_distribution<T>(0.0, 1.0);
+
+    std::vector<Vector2<T>> points;
+    for (int i = 0; i < numSec; ++i) {
+        double final = 1.0/numSec + double(1.0 / numSec*i);
+        double start = 0.0 + double(1.0/numSec*i);
+        auto distribution_y = std::uniform_real_distribution<T>(start, final);
+        if (i % 2 == 1) {
+            for (int j = 0; j < coarsePnts; j++) {
+                points.push_back(Vector2<T>(distribution_x(generator), distribution_y(generator)));
+            }
+        }
+        else {
+            for (int j = 0; j < finePnts; j++) {
+                points.push_back(Vector2<T>(distribution_x(generator), distribution_y(generator)));
+            }
+        }
+    }
+
+    return points;
+}
 
 // Rendering
 
@@ -235,11 +262,12 @@ graph MakeGraph(const Diagram<T>& dia,int pnts)
     return G;
 }
 
-void saveGraph(graph& G)
+void saveMicrostructure(graph& G, bool bimodal, int numSec)
 {
     int NumVertices = G.N - G.edges;
     std::ofstream myfile("Microstructure.txt", std::ios::trunc);
     myfile << "s t a_{pq} GB_Angle Volume (number vertices = " << NumVertices << ")" << std::endl;
+    myfile << NumVertices << " " << bimodal << " " << numSec << " " << NumVertices << " " << NumVertices << std::endl;
     if (myfile.is_open())
     {
         for (int val = 0; val < G.edges; val++) {
@@ -253,16 +281,40 @@ void saveGraph(graph& G)
         }
         myfile.close();
     }
-    else std::cout << "Unable to open file";
+    else std::cout << "Unable to open microstructure file";
+
+    // save vertices of grains for reconstruction
+    std::ofstream myfile2("Microstructure_poly.txt", std::ios::trunc);
+    
+    if (myfile2.is_open()) {
+
+        for (int i = 0; i < NumVertices; i++) {
+            auto& vert = G.vertices.at(i);
+            for (int j = 0; j < vert.size(); j++) {
+
+                myfile2 << vert.at(j).x << " " << vert.at(j).y << " ";
+
+            }
+            myfile2 << std::endl;
+        }
+        myfile2.close();
+    }
 }
 int main()
 {
-    auto nbPoints = 1000;
-    auto diagram = generateDiagram(generatePoints<Float>(nbPoints));
-    auto triangulation = diagram.computeTriangulation();
+    int numSec = 5; int finePnts = 500; int coarsePnts = 50;
 
+    //bool bimodal = true;
+    //int nbPoints = std::floor(numSec / 2) * coarsePnts + (numSec - std::floor(numSec / 2)) * finePnts;
+    //auto diagram = generateDiagram(generateBimodalLaminate<Float>(numSec, finePnts, coarsePnts));
+
+    bool bimodal = false;
+    auto nbPoints = 500;
+    auto diagram = generateDiagram(generatePoints<Float>(nbPoints));
+
+    auto triangulation = diagram.computeTriangulation();
     graph G = MakeGraph(diagram, nbPoints);
-    saveGraph(G);
+    saveMicrostructure(G,bimodal, numSec);
  
     // Display the diagram
     auto settings = sf::ContextSettings();
